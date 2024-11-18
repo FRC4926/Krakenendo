@@ -14,7 +14,8 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
-import frc.robot.generated.TunerConstants;
+import frc.robot.Constants.TunerConstants;
+import frc.robot.Constants.OIConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 
 public class RobotContainer {
@@ -22,7 +23,8 @@ public class RobotContainer {
   private double MaxAngularRate = 1.5 * Math.PI; // 3/4 of a rotation per second max angular velocity
 
   /* Setting up bindings for necessary control of the swerve drive platform */
-  private final CommandXboxController joystick = new CommandXboxController(0); // My joystick
+  public CommandXboxController m_operatorController = new CommandXboxController(OIConstants.kOperatorControllerPort);
+  private final CommandXboxController joystick = new CommandXboxController(OIConstants.kDriverControllerPort); // My joystick
   private final CommandSwerveDrivetrain drivetrain = TunerConstants.DriveTrain; // My drivetrain
 
   private final SwerveRequest.FieldCentric drive = new SwerveRequest.FieldCentric()
@@ -54,6 +56,32 @@ public class RobotContainer {
       drivetrain.seedFieldRelative(new Pose2d(new Translation2d(), Rotation2d.fromDegrees(90)));
     }
     drivetrain.registerTelemetry(logger::telemeterize);
+
+    //shooter and intake button bindings
+    m_robotShooter.setDefaultCommand(
+        // The left stick controls translation of the robot.
+        // Turning is controlled by the X axis of the right stick.
+        new RunCommand(
+            () -> {
+              m_robotShooter.defaultShooter();
+            },
+            m_robotShooter));
+
+    m_operatorController.leftBumper()
+        .whileTrue(new RunCommand(
+            () -> m_robotShooter.outake(),
+            m_robotShooter));
+    
+    m_operatorController.leftTrigger(0.5)
+        .whileTrue(new RunCommand(
+            () -> m_robotShooter.intake(),
+            m_robotShooter));
+
+    m_operatorController.rightTrigger(0.2)
+        .whileTrue(new RunCommand(
+            () -> m_robotShooter.shoot(),
+            m_robotShooter));
+
   }
 
   public RobotContainer() {
