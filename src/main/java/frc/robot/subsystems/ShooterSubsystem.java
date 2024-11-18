@@ -14,7 +14,7 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import com.revrobotics.CANSparkLowLevel.MotorType;
 
 import frc.robot.Constants;
-import frc.robot.Constants.AutoConstants;
+import frc.robot.Constants.AutonConstants;
 import frc.robot.Constants.ShooterConstants;
 
 public class ShooterSubsystem extends SubsystemBase {
@@ -35,7 +35,7 @@ public class ShooterSubsystem extends SubsystemBase {
         0.01,0, 0
     );
 
-    private double targetRPM = Constants.ShooterConstants.SteadySpeedRPM;
+    private double targetRPM = Constants.ShooterConstants.kSteadySpeedRPM;
 
     public ShooterSubsystem() {
         resetMotors();
@@ -120,7 +120,7 @@ public class ShooterSubsystem extends SubsystemBase {
 
 
     public void intake() {
-        if (getDistanceValue() <= Constants.ShooterCommand.distanceThreshold)
+        if (getDistanceValue() <= Constants.ShooterConstants.kDistanceThreshold)
         {
             intakeMotor.set(Constants.ShooterConstants.intakeEffort);
             conveyorMotor.set(Constants.ShooterConstants.conveyorEffort);
@@ -207,7 +207,7 @@ public class ShooterSubsystem extends SubsystemBase {
     }
     // isFinishedAuton(double target) is now isFinished(double offset) (they do the same exact thing)
     public boolean isFinishedAuton() {
-        return isFinished(AutoConstants.kSubwooferTopRPM);
+        return isFinished(AutonConstants.kSubwooferTopRPM);
     }
 
     //TODO: delete

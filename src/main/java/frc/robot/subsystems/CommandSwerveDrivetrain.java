@@ -2,9 +2,12 @@ package frc.robot.subsystems;
 
 import java.util.function.Supplier;
 
+import com.ctre.phoenix6.Orchestra;
 import com.ctre.phoenix6.Utils;
+import com.ctre.phoenix6.configs.AudioConfigs;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveDrivetrain;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveDrivetrainConstants;
+import com.ctre.phoenix6.mechanisms.swerve.SwerveModule;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveModuleConstants;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveRequest;
 
@@ -78,6 +81,20 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
                                 : BlueAlliancePerspectiveRotation);
                 hasAppliedOperatorPerspective = true;
             });
+        }
+    }
+
+    public void setAllMotorConfigs(AudioConfigs config) {
+        for (SwerveModule module : Modules) {
+            module.getDriveMotor().getConfigurator().apply(config);
+            module.getSteerMotor().getConfigurator().apply(config);
+        }
+    }
+
+    public void addAllMotorsToOrchestra(Orchestra o) {
+        for (SwerveModule module : Modules) {
+            o.addInstrument(module.getDriveMotor());
+            o.addInstrument(module.getSteerMotor());
         }
     }
 }
