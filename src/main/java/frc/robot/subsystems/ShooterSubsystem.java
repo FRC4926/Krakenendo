@@ -35,6 +35,8 @@ public class ShooterSubsystem extends SubsystemBase {
         0.01,0, 0
     );
 
+    private boolean startStage = false;
+
     private double targetRPM = Constants.ShooterConstants.kSteadySpeedRPM;
 
     public ShooterSubsystem() {
@@ -65,6 +67,9 @@ public class ShooterSubsystem extends SubsystemBase {
     @Override
     public void periodic() 
     {
+
+        SmartDashboard.putNumber("DistanceThreshold", getDistanceValue());
+        SmartDashboard.putBoolean("StartStage", startStage);
         //worst case
         // if ((RobotContainer.m_operatorController.getLeftTriggerAxis()) > .2)
         // {
@@ -84,6 +89,7 @@ public class ShooterSubsystem extends SubsystemBase {
 
     public void shoot()
     {
+        startStage = false;
         conveyorMotor.set(Constants.ShooterConstants.conveyorEffort);
         intakeMotor.set(Constants.ShooterConstants.intakeEffort);
         lowerShooterMotor.set(-1);
@@ -120,12 +126,22 @@ public class ShooterSubsystem extends SubsystemBase {
 
 
     public void intake() {
-        if (getDistanceValue() <= Constants.ShooterConstants.kDistanceThreshold)
+
+        if (getDistanceValue() > Constants.ShooterConstants.kDistanceThreshold && !startStage)
+        {
+            startStage = true;
+        }
+        if (getDistanceValue() <= Constants.ShooterConstants.kDistanceThreshold && !startStage)
         {
             intakeMotor.set(Constants.ShooterConstants.intakeEffort);
             conveyorMotor.set(Constants.ShooterConstants.conveyorEffort);
         
-        } else
+        } else if (getDistanceValue() > 1.2 && startStage)
+        {
+            intakeMotor.set(-Constants.ShooterConstants.intakeEffort/3);
+            conveyorMotor.set(-Constants.ShooterConstants.conveyorEffort/3);        
+        }
+        else
         {
             intakeMotor.set(0);
             conveyorMotor.set(0);
@@ -135,8 +151,8 @@ public class ShooterSubsystem extends SubsystemBase {
     public void defaultShooter()
     {
         intakeMotor.set(0);
-        upperShooterMotor.set(-0.5);
-        lowerShooterMotor.set(-0.5);
+        upperShooterMotor.set(0);
+        lowerShooterMotor.set(0);
         conveyorMotor.set(0);
         // if(isFinished(100))
         //RPMShoot(targetRPM, targetRPM);  
@@ -145,8 +161,9 @@ public class ShooterSubsystem extends SubsystemBase {
     }
     public void outake()
     {
+        startStage = false;
         intakeMotor.set(-Constants.ShooterConstants.intakeEffort/2.0);
-        conveyorMotor.set(Constants.ShooterConstants.conveyorEffort/2.0);
+        conveyorMotor.set(-Constants.ShooterConstants.conveyorEffort/2.0);
     }
 
     public void convey() {
