@@ -219,7 +219,7 @@ public class Constants {
         public static final int kDistanceSensorId = 1;
 
         public static final int kConveyorMotorCurrentLimit = 60;
-        public static final int kIntakeMotorCurrentLimit = 60;
+        public static final int kIntakeMotorCurrentLimit = 75;
         public static final int kLowerMotorCurrentLimit = 55;
         public static final int kUpperMotorCurrentLimit = 55;
 
@@ -234,14 +234,14 @@ public class Constants {
         public static final double kTolerance = 30.0;
         public static final double kSteadySpeedRPM = 2500;
 
-        public static final double kDistanceThreshold = 1.2;
+        public static final double kDistanceThreshold = 0.55;
 
         public static final double kFullSendVoltageScale = 1.2;
 
         public static final int kDistanceSensorAverageBits = 2;
 
-        public static final double intakeEffort = -0.2;
-        public static final double conveyorEffort = 0.2;
+        public static final double intakeEffort = 0.75;
+        public static final double conveyorEffort = 0.7;
     }
 
     public static final class ArmConstants {
