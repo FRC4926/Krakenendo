@@ -4,8 +4,11 @@
 
 package frc.robot;
 
+import org.photonvision.PhotonCamera;
+
 import com.ctre.phoenix6.Utils;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveRequest;
+import com.pathplanner.lib.commands.PathPlannerAuto;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveModule.DriveRequestType;
 
 import edu.wpi.first.math.geometry.Pose2d;
@@ -19,7 +22,7 @@ import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import frc.robot.Constants.TunerConstants;
 import frc.robot.Constants.IOConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
-import frc.robot.subsystems.OrchestraSubsystem;
+// import frc.robot.subsystems.OrchestraSubsystem;
 import frc.robot.subsystems.ShooterSubsystem;
 
 public class RobotContainer {
@@ -41,7 +44,9 @@ public class RobotContainer {
     private final Telemetry logger = new Telemetry(MaxSpeed);
 
     private final ShooterSubsystem shooter = new ShooterSubsystem();
-    private final OrchestraSubsystem orchestra = new OrchestraSubsystem(drivetrain, Filesystem.getDeployDirectory() + "/test.chrp");
+    //private final OrchestraSubsystem orchestra = new OrchestraSubsystem(drivetrain, Filesystem.getDeployDirectory() + "/test.chrp");
+
+
 
     private void configureBindings() {
         drivetrain.setDefaultCommand( // Drivetrain will execute this command periodically
@@ -86,14 +91,14 @@ public class RobotContainer {
             .whileTrue(new RunCommand(
                 () -> shooter.shoot(),
                 shooter));
-        operatorController.a()
-            .onTrue(new RunCommand(() -> {
-                if (orchestra.isPlaying()) {
-                    orchestra.stop();
-                } else {
-                    orchestra.play();
-                }
-            }, orchestra));
+        // operatorController.a()
+        //     .onTrue(new RunCommand(() -> {
+        //         if (orchestra.isPlaying()) {
+        //             orchestra.stop();
+        //         } else {
+        //             orchestra.play();
+        //         }
+        //     }, orchestra));
     }
 
     public RobotContainer() {
@@ -101,6 +106,6 @@ public class RobotContainer {
     }
 
     public Command getAutonomousCommand() {
-        return Commands.print("No autonomous command configured");
+        return new PathPlannerAuto("CenterTwoNote");
     }
 }

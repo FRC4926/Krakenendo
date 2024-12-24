@@ -92,8 +92,8 @@ public class ShooterSubsystem extends SubsystemBase {
         startStage = false;
         conveyorMotor.set(Constants.ShooterConstants.conveyorEffort);
         intakeMotor.set(Constants.ShooterConstants.intakeEffort);
-        lowerShooterMotor.set(-1);
-        upperShooterMotor.set(-1);
+        lowerShooterMotor.set(lowerPIDController.calculate(targetRPM));
+        upperShooterMotor.set(upperPIDController.calculate(targetRPM));
     }
 
     public void autonShoot()
@@ -151,8 +151,8 @@ public class ShooterSubsystem extends SubsystemBase {
     public void defaultShooter()
     {
         intakeMotor.set(0);
-        upperShooterMotor.set(0);
-        lowerShooterMotor.set(0);
+        upperShooterMotor.set(-0.5);
+        lowerShooterMotor.set(-0.5);
         conveyorMotor.set(0);
         // if(isFinished(100))
         //RPMShoot(targetRPM, targetRPM);  

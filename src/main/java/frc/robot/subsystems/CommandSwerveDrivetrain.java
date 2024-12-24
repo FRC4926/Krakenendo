@@ -1,23 +1,50 @@
 package frc.robot.subsystems;
 
+import java.util.Optional;
 import java.util.function.Supplier;
+
+import org.photonvision.EstimatedRobotPose;
+import org.photonvision.PhotonCamera;
+import org.photonvision.PhotonPoseEstimator;
+import org.photonvision.PhotonPoseEstimator.PoseStrategy;
 
 import com.ctre.phoenix6.Orchestra;
 import com.ctre.phoenix6.Utils;
 import com.ctre.phoenix6.configs.AudioConfigs;
+import com.ctre.phoenix6.hardware.Pigeon2;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveDrivetrain;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveDrivetrainConstants;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveModule;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveModuleConstants;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveRequest;
+import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.controllers.PPHolonomicDriveController;
+import com.pathplanner.lib.util.HolonomicPathFollowerConfig;
+import com.pathplanner.lib.util.PIDConstants;
+import com.pathplanner.lib.util.ReplanningConfig;
 
+import edu.wpi.first.apriltag.AprilTagFieldLayout;
+import edu.wpi.first.apriltag.AprilTagFields;
+import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Rotation3d;
+import edu.wpi.first.math.geometry.Transform3d;
+import edu.wpi.first.math.geometry.Translation3d;
+import edu.wpi.first.math.kinematics.ChassisSpeeds;
+import edu.wpi.first.math.kinematics.SwerveDriveOdometry;
+import edu.wpi.first.math.kinematics.SwerveModulePosition;
+import edu.wpi.first.math.kinematics.SwerveModuleState;
+import edu.wpi.first.networktables.NetworkTableInstance;
+import edu.wpi.first.networktables.StructPublisher;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.Notifier;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Subsystem;
+import frc.robot.Constants;
 
 /**
  * Class that extends the Phoenix SwerveDrivetrain class and implements
@@ -28,6 +55,10 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
     private Notifier m_simNotifier = null;
     private double m_lastSimTime;
 
+    //private final PhotonCamera smallCamera = new PhotonCamera("smallcam");
+    private final PhotonCamera bigCamera = new PhotonCamera("bigcam");
+    Transform3d robotToBigCam = new Transform3d(new Translation3d(7*0.0254, -13*0.0254, 19*0.0254), new Rotation3d(0,0,0));
+
     /* Blue alliance sees forward as 0 degrees (toward red alliance wall) */
     private final Rotation2d BlueAlliancePerspectiveRotation = Rotation2d.fromDegrees(0);
     /* Red alliance sees forward as 180 degrees (toward blue alliance wall) */
@@ -35,17 +66,75 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
     /* Keep track if we've ever applied the operator perspective before or not */
     private boolean hasAppliedOperatorPerspective = false;
 
+    AprilTagFieldLayout aprilTagFieldLayout = AprilTagFields.k2024Crescendo.loadAprilTagLayoutField();
+    PhotonPoseEstimator photonPoseEstimator = new PhotonPoseEstimator(aprilTagFieldLayout, PoseStrategy.CLOSEST_TO_REFERENCE_POSE, bigCamera, robotToBigCam);
+    
+    private StructPublisher<Pose2d> posePublisher = NetworkTableInstance.getDefault()
+    .getStructTopic("Pose", Pose2d.struct).publish();
+
+
     public CommandSwerveDrivetrain(SwerveDrivetrainConstants driveTrainConstants, double OdometryUpdateFrequency, SwerveModuleConstants... modules) {
         super(driveTrainConstants, OdometryUpdateFrequency, modules);
+        AutoBuilder.configureHolonomic(
+            this::getPose, // Robot pose supplier
+            this::resetPose, // Method to reset odometry (will be called if your auto has a starting pose)
+            this::getRobotRelativeSpeeds, // ChassisSpeeds supplier. MUST BE ROBOT RELATIVE
+            this::driveRobotRelative, // Method that will drive the robot given ROBOT RELATIVE ChassisSpeeds
+            new HolonomicPathFollowerConfig( // HolonomicPathFollowerConfig, this should likely live in your Constants class
+                    new PIDConstants(.04, 0.0, 0.0), // Translation PID constants
+                    new PIDConstants(4.0, 0.0, 0.0), // Rotation PID constants
+                    4.8, // Max module speed, in m/s
+                    0.3429, // Drive base radius in meters. Distance from robot center to furthest module.
+                    new ReplanningConfig() // Default path replanning config. See the API for the options here
+            ),
+            () -> {
+              // Boolean supplier that controls when the path will be mirrored for the red alliance
+              // This will flip the path being followed to the red side of the field.
+              // THE ORIGIN WILL REMAIN ON THE BLUE SIDE
+
+              var alliance = DriverStation.getAlliance();
+              if (alliance.isPresent()) {
+                return alliance.get() == DriverStation.Alliance.Red;
+              }
+              return false;
+            },
+            this // Reference to this subsystem to set requirements
+        );
         if (Utils.isSimulation()) {
             startSimThread();
         }
     }
+
+    public void driveRobotRelative(ChassisSpeeds robotRelativeSpeeds) {
+        ChassisSpeeds targetSpeeds = ChassisSpeeds.discretize(robotRelativeSpeeds, 0.02);
+
+        SwerveModuleState[] targetStates = m_kinematics.toSwerveModuleStates(targetSpeeds);
+        m_moduleStates = targetStates;
+    }
+
+
     public CommandSwerveDrivetrain(SwerveDrivetrainConstants driveTrainConstants, SwerveModuleConstants... modules) {
         super(driveTrainConstants, modules);
+
         if (Utils.isSimulation()) {
             startSimThread();
         }
+    }
+
+    public Pose2d getPose()
+    {
+        return m_odometry.getEstimatedPosition();
+    }
+
+
+    public void resetPose(Pose2d pose)
+    {
+        m_odometry.resetPosition(m_fieldRelativeOffset, m_modulePositions, pose);
+    }
+
+    public ChassisSpeeds getRobotRelativeSpeeds()
+    {
+        return m_kinematics.toChassisSpeeds(m_moduleStates);
     }
 
     public Command applyRequest(Supplier<SwerveRequest> requestSupplier) {
@@ -67,6 +156,16 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
         m_simNotifier.startPeriodic(kSimLoopPeriod);
     }
 
+    public void updateVisionOdometry(Pose2d pose, double time)
+    {
+        m_odometry.addVisionMeasurement(pose, time);
+    }
+
+    public Optional<EstimatedRobotPose> getEstimatedGlobalPose(Pose2d prevEstimatedRobotPose) {
+        photonPoseEstimator.setReferencePose(prevEstimatedRobotPose);
+        return photonPoseEstimator.update();
+    }
+
     @Override
     public void periodic() {
         /* Periodically try to apply the operator perspective */
@@ -74,6 +173,20 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
         /* This allows us to correct the perspective in case the robot code restarts mid-match */
         /* Otherwise, only check and apply the operator perspective if the DS is disabled */
         /* This ensures driving behavior doesn't change until an explicit disable event occurs during testing*/
+        Optional<EstimatedRobotPose> poses = getEstimatedGlobalPose(m_odometry.getEstimatedPosition());
+
+        try 
+        {
+            updateVisionOdometry(poses.get().estimatedPose.toPose2d(), poses.get().timestampSeconds);
+            SmartDashboard.putBoolean("Error", false);
+            SmartDashboard.putString("ErrorValue","none");
+
+        } catch (Exception e)
+        {
+            SmartDashboard.putBoolean("Error", true);
+            SmartDashboard.putString("ErrorValue", e.toString());
+        }
+
         if (!hasAppliedOperatorPerspective || DriverStation.isDisabled()) {
             DriverStation.getAlliance().ifPresent((allianceColor) -> {
                 this.setOperatorPerspectiveForward(
@@ -82,19 +195,22 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
                 hasAppliedOperatorPerspective = true;
             });
         }
+
+        posePublisher.set(getPose());
     }
 
-    public void setAllMotorConfigs(AudioConfigs config) {
-        for (SwerveModule module : Modules) {
-            module.getDriveMotor().getConfigurator().apply(config);
-            module.getSteerMotor().getConfigurator().apply(config);
-        }
-    }
 
-    public void addAllMotorsToOrchestra(Orchestra o) {
-        for (SwerveModule module : Modules) {
-            o.addInstrument(module.getDriveMotor());
-            o.addInstrument(module.getSteerMotor());
-        }
-    }
+    // public void setAllMotorConfigs(AudioConfigs config) {
+    //     for (SwerveModule module : Modules) {
+    //         module.getDriveMotor().getConfigurator().apply(config);
+    //         module.getSteerMotor().getConfigurator().apply(config);
+    //     }
+    // }
+
+    // public void addAllMotorsToOrchestra(Orchestra o) {
+    //     for (SwerveModule module : Modules) {
+    //         o.addInstrument(module.getDriveMotor());
+    //         o.addInstrument(module.getSteerMotor());
+    //     }
+    // }
 }
