@@ -67,7 +67,7 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
     private boolean hasAppliedOperatorPerspective = false;
 
     AprilTagFieldLayout aprilTagFieldLayout = AprilTagFields.k2024Crescendo.loadAprilTagLayoutField();
-    PhotonPoseEstimator photonPoseEstimator = new PhotonPoseEstimator(aprilTagFieldLayout, PoseStrategy.CLOSEST_TO_REFERENCE_POSE, bigCamera, robotToBigCam);
+    PhotonPoseEstimator photonPoseEstimator = new PhotonPoseEstimator(aprilTagFieldLayout, PoseStrategy.MULTI_TAG_PNP_ON_COPROCESSOR, bigCamera, robotToBigCam);
     
     private StructPublisher<Pose2d> posePublisher = NetworkTableInstance.getDefault()
     .getStructTopic("Pose", Pose2d.struct).publish();
@@ -75,33 +75,50 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
 
     public CommandSwerveDrivetrain(SwerveDrivetrainConstants driveTrainConstants, double OdometryUpdateFrequency, SwerveModuleConstants... modules) {
         super(driveTrainConstants, OdometryUpdateFrequency, modules);
-        AutoBuilder.configureHolonomic(
-            this::getPose, // Robot pose supplier
-            this::resetPose, // Method to reset odometry (will be called if your auto has a starting pose)
-            this::getRobotRelativeSpeeds, // ChassisSpeeds supplier. MUST BE ROBOT RELATIVE
-            this::driveRobotRelative, // Method that will drive the robot given ROBOT RELATIVE ChassisSpeeds
-            new HolonomicPathFollowerConfig( // HolonomicPathFollowerConfig, this should likely live in your Constants class
-                    new PIDConstants(.04, 0.0, 0.0), // Translation PID constants
-                    new PIDConstants(4.0, 0.0, 0.0), // Rotation PID constants
-                    4.8, // Max module speed, in m/s
-                    0.3429, // Drive base radius in meters. Distance from robot center to furthest module.
-                    new ReplanningConfig() // Default path replanning config. See the API for the options here
-            ),
-            () -> {
-              // Boolean supplier that controls when the path will be mirrored for the red alliance
-              // This will flip the path being followed to the red side of the field.
-              // THE ORIGIN WILL REMAIN ON THE BLUE SIDE
-
-              var alliance = DriverStation.getAlliance();
-              if (alliance.isPresent()) {
-                return alliance.get() == DriverStation.Alliance.Red;
-              }
-              return false;
-            },
-            this // Reference to this subsystem to set requirements
-        );
+        configureAutoBuilder();
         if (Utils.isSimulation()) {
             startSimThread();
+        }
+    }
+
+    public CommandSwerveDrivetrain(SwerveDrivetrainConstants driveTrainConstants, SwerveModuleConstants... modules) {
+        super(driveTrainConstants, modules);
+        configureAutoBuilder();
+        if (Utils.isSimulation()) {
+            startSimThread();
+        }
+    }
+
+    public void configureAutoBuilder()
+    {
+        try {
+            AutoBuilder.configureHolonomic(
+                this::getPose, // Robot pose supplier
+                this::resetPose, // Method to reset odometry (will be called if your auto has a starting pose)
+                this::getRobotRelativeSpeeds, // ChassisSpeeds supplier. MUST BE ROBOT RELATIVE
+                this::driveRobotRelative, // Method that will drive the robot given ROBOT RELATIVE ChassisSpeeds
+                new HolonomicPathFollowerConfig( // HolonomicPathFollowerConfig, this should likely live in your Constants class
+                        new PIDConstants(.04, 0.0, 0.0), // Translation PID constants
+                        new PIDConstants(4.0, 0.0, 0.0), // Rotation PID constants
+                        4.8, // Max module speed, in m/s
+                        0.3429, // Drive base radius in meters. Distance from robot center to furthest module.
+                        new ReplanningConfig() // Default path replanning config. See the API for the options here
+                ),
+                () -> {
+                // Boolean supplier that controls when the path will be mirrored for the red alliance
+                // This will flip the path being followed to the red side of the field.
+                // THE ORIGIN WILL REMAIN ON THE BLUE SIDE
+
+                var alliance = DriverStation.getAlliance();
+                if (alliance.isPresent()) {
+                    return alliance.get() == DriverStation.Alliance.Red;
+                }
+                return false;
+                },
+                this // Reference to this subsystem to set requirements
+            );
+        } catch (Exception ex) {
+            DriverStation.reportError("Failed to load PathPlanner config and configure AutoBuilder", ex.getStackTrace());
         }
     }
 
@@ -110,15 +127,6 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
 
         SwerveModuleState[] targetStates = m_kinematics.toSwerveModuleStates(targetSpeeds);
         m_moduleStates = targetStates;
-    }
-
-
-    public CommandSwerveDrivetrain(SwerveDrivetrainConstants driveTrainConstants, SwerveModuleConstants... modules) {
-        super(driveTrainConstants, modules);
-
-        if (Utils.isSimulation()) {
-            startSimThread();
-        }
     }
 
     public Pose2d getPose()
@@ -173,28 +181,36 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
         /* This allows us to correct the perspective in case the robot code restarts mid-match */
         /* Otherwise, only check and apply the operator perspective if the DS is disabled */
         /* This ensures driving behavior doesn't change until an explicit disable event occurs during testing*/
-        Optional<EstimatedRobotPose> poses = getEstimatedGlobalPose(m_odometry.getEstimatedPosition());
+        //Optional<EstimatedRobotPose> poses = getEstimatedGlobalPose(m_odometry.getEstimatedPosition());
+        Optional<EstimatedRobotPose> poses = photonPoseEstimator.update();
 
-        try 
+        if (poses.isPresent())
         {
-            updateVisionOdometry(poses.get().estimatedPose.toPose2d(), poses.get().timestampSeconds);
-            SmartDashboard.putBoolean("Error", false);
-            SmartDashboard.putString("ErrorValue","none");
+            EstimatedRobotPose estimatedPose = poses.get();
+            updateVisionOdometry(estimatedPose.toPose2d(), estimatedPose.timestampSeconds);
 
-        } catch (Exception e)
-        {
-            SmartDashboard.putBoolean("Error", true);
-            SmartDashboard.putString("ErrorValue", e.toString());
         }
 
-        if (!hasAppliedOperatorPerspective || DriverStation.isDisabled()) {
-            DriverStation.getAlliance().ifPresent((allianceColor) -> {
-                this.setOperatorPerspectiveForward(
-                        allianceColor == Alliance.Red ? RedAlliancePerspectiveRotation
-                                : BlueAlliancePerspectiveRotation);
-                hasAppliedOperatorPerspective = true;
-            });
-        }
+        // try 
+        // {
+        //     updateVisionOdometry(poses.get().estimatedPose.toPose2d(), poses.get().timestampSeconds);
+        //     SmartDashboard.putBoolean("Error", false);
+        //     SmartDashboard.putString("ErrorValue","none");
+
+        // } catch (Exception e)
+        // {
+        //     SmartDashboard.putBoolean("Error", true);
+        //     SmartDashboard.putString("ErrorValue", e.toString());
+        // }
+
+        // if (!hasAppliedOperatorPerspective || DriverStation.isDisabled()) {
+        //     DriverStation.getAlliance().ifPresent((allianceColor) -> {
+        //         this.setOperatorPerspectiveForward(
+        //                 allianceColor == Alliance.Red ? RedAlliancePerspectiveRotation
+        //                         : BlueAlliancePerspectiveRotation);
+        //         hasAppliedOperatorPerspective = true;
+        //     });
+        // }
 
         posePublisher.set(getPose());
     }
