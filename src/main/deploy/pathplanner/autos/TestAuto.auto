@@ -3,7 +3,7 @@
   "startingPose": {
     "position": {
       "x": 1.26,
-      "y": 5.56
+      "y": 5.562
     },
     "rotation": 0
   },
@@ -14,19 +14,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "FourNote1"
-          }
-        },
-        {
-          "type": "named",
-          "data": {
-            "name": "Intake"
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "FourNote2"
+            "pathName": "TestPath"
           }
         }
       ]

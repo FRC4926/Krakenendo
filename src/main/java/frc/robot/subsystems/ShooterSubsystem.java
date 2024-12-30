@@ -16,6 +16,7 @@ import com.revrobotics.CANSparkLowLevel.MotorType;
 import frc.robot.Constants;
 import frc.robot.Constants.AutonConstants;
 import frc.robot.Constants.ShooterConstants;
+import pabeles.concurrency.IntRangeObjectConsumer;
 
 public class ShooterSubsystem extends SubsystemBase {
     public CANSparkMax conveyorMotor = new CANSparkMax(ShooterConstants.kConveyorMotorCanId, MotorType.kBrushless);
@@ -146,6 +147,11 @@ public class ShooterSubsystem extends SubsystemBase {
             intakeMotor.set(0);
             conveyorMotor.set(0);
         }
+    }
+
+    public void intake1()
+    {
+        intakeMotor.set(Constants.ShooterConstants.intakeEffort);
     }
 
     public void defaultShooter()

@@ -17,6 +17,7 @@ import com.ctre.phoenix6.mechanisms.swerve.SwerveDrivetrainConstants;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveModule;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveModuleConstants;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveRequest;
+import com.ctre.phoenix6.mechanisms.swerve.SwerveRequest.ApplyChassisSpeeds;
 import com.pathplanner.lib.auto.AutoBuilder;
 import com.pathplanner.lib.controllers.PPHolonomicDriveController;
 import com.pathplanner.lib.util.HolonomicPathFollowerConfig;
@@ -56,8 +57,8 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
     private double m_lastSimTime;
 
     //private final PhotonCamera smallCamera = new PhotonCamera("smallcam");
-    private final PhotonCamera bigCamera = new PhotonCamera("bigcam");
-    Transform3d robotToBigCam = new Transform3d(new Translation3d(7*0.0254, -13*0.0254, 19*0.0254), new Rotation3d(0,0,0));
+    // private final PhotonCamera bigCamera = new PhotonCamera("bigcam");
+    // Transform3d robotToBigCam = new Transform3d(new Translation3d(7*0.0254, -13*0.0254, 19*0.0254), new Rotation3d(0,0,0));
 
     /* Blue alliance sees forward as 0 degrees (toward red alliance wall) */
     private final Rotation2d BlueAlliancePerspectiveRotation = Rotation2d.fromDegrees(0);
@@ -66,8 +67,10 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
     /* Keep track if we've ever applied the operator perspective before or not */
     private boolean hasAppliedOperatorPerspective = false;
 
-    AprilTagFieldLayout aprilTagFieldLayout = AprilTagFields.k2024Crescendo.loadAprilTagLayoutField();
-    PhotonPoseEstimator photonPoseEstimator = new PhotonPoseEstimator(aprilTagFieldLayout, PoseStrategy.MULTI_TAG_PNP_ON_COPROCESSOR, bigCamera, robotToBigCam);
+    private final ApplyChassisSpeeds m_pathApplyRobotSpeeds = new ApplyChassisSpeeds();
+
+    // AprilTagFieldLayout aprilTagFieldLayout = AprilTagFields.k2024Crescendo.loadAprilTagLayoutField();
+    // PhotonPoseEstimator photonPoseEstimator = new PhotonPoseEstimator(aprilTagFieldLayout, PoseStrategy.MULTI_TAG_PNP_ON_COPROCESSOR, bigCamera, robotToBigCam);
     
     private StructPublisher<Pose2d> posePublisher = NetworkTableInstance.getDefault()
     .getStructTopic("Pose", Pose2d.struct).publish();
@@ -93,15 +96,17 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
     {
         try {
             AutoBuilder.configureHolonomic(
-                this::getPose, // Robot pose supplier
+                this::getPose2, // Robot pose supplier
                 this::resetPose, // Method to reset odometry (will be called if your auto has a starting pose)
-                this::getRobotRelativeSpeeds, // ChassisSpeeds supplier. MUST BE ROBOT RELATIVE
-                this::driveRobotRelative, // Method that will drive the robot given ROBOT RELATIVE ChassisSpeeds
+                this::getSpeeds, // ChassisSpeeds supplier. MUST BE ROBOT RELATIVE
+                (speeds) -> setControl(
+                    m_pathApplyRobotSpeeds.withSpeeds(speeds)
+                ), // Method that will drive the robot given ROBOT RELATIVE ChassisSpeeds
                 new HolonomicPathFollowerConfig( // HolonomicPathFollowerConfig, this should likely live in your Constants class
-                        new PIDConstants(.04, 0.0, 0.0), // Translation PID constants
+                        new PIDConstants(0.04, 0.0, 0.0), // Translation PID constants
                         new PIDConstants(4.0, 0.0, 0.0), // Rotation PID constants
                         4.8, // Max module speed, in m/s
-                        0.3429, // Drive base radius in meters. Distance from robot center to furthest module.
+                        .488, // Drive base radius in meters. Distance from robot center to furthest module.
                         new ReplanningConfig() // Default path replanning config. See the API for the options here
                 ),
                 () -> {
@@ -124,7 +129,6 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
 
     public void driveRobotRelative(ChassisSpeeds robotRelativeSpeeds) {
         ChassisSpeeds targetSpeeds = ChassisSpeeds.discretize(robotRelativeSpeeds, 0.02);
-
         SwerveModuleState[] targetStates = m_kinematics.toSwerveModuleStates(targetSpeeds);
         m_moduleStates = targetStates;
     }
@@ -134,10 +138,28 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
         return m_odometry.getEstimatedPosition();
     }
 
+    public Pose2d getPose2()
+    {
+        return getState().Pose;
+    }
+
+    public ChassisSpeeds getSpeeds()
+    {
+        return getState().speeds;
+    }
+
 
     public void resetPose(Pose2d pose)
     {
         m_odometry.resetPosition(m_fieldRelativeOffset, m_modulePositions, pose);
+    }
+
+    public void getModuleInfo()
+    {
+        //TODO: telemetry this
+        for (SwerveModule module : Modules) {
+            module.getDriveMotor().getDifferentialAverageVelocity();
+        }
     }
 
     public ChassisSpeeds getRobotRelativeSpeeds()
@@ -169,10 +191,10 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
         m_odometry.addVisionMeasurement(pose, time);
     }
 
-    public Optional<EstimatedRobotPose> getEstimatedGlobalPose(Pose2d prevEstimatedRobotPose) {
-        photonPoseEstimator.setReferencePose(prevEstimatedRobotPose);
-        return photonPoseEstimator.update();
-    }
+    // public Optional<EstimatedRobotPose> getEstimatedGlobalPose(Pose2d prevEstimatedRobotPose) {
+    //     photonPoseEstimator.setReferencePose(prevEstimatedRobotPose);
+    //     return photonPoseEstimator.update();
+    // }
 
     @Override
     public void periodic() {
@@ -182,14 +204,14 @@ public class CommandSwerveDrivetrain extends SwerveDrivetrain implements Subsyst
         /* Otherwise, only check and apply the operator perspective if the DS is disabled */
         /* This ensures driving behavior doesn't change until an explicit disable event occurs during testing*/
         //Optional<EstimatedRobotPose> poses = getEstimatedGlobalPose(m_odometry.getEstimatedPosition());
-        Optional<EstimatedRobotPose> poses = photonPoseEstimator.update();
+        // Optional<EstimatedRobotPose> poses = photonPoseEstimator.update();
 
-        if (poses.isPresent())
-        {
-            EstimatedRobotPose estimatedPose = poses.get();
-            updateVisionOdometry(estimatedPose.toPose2d(), estimatedPose.timestampSeconds);
+        // if (poses.isPresent())
+        // {
+        //     EstimatedRobotPose estimatedPose = poses.get();
+        //     updateVisionOdometry(estimatedPose.estimatedPose.toPose2d(), estimatedPose.timestampSeconds);
 
-        }
+        // }
 
         // try 
         // {

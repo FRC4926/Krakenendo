@@ -8,12 +8,21 @@ import org.photonvision.PhotonCamera;
 
 import com.ctre.phoenix6.Utils;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveRequest;
+import com.pathplanner.lib.auto.NamedCommands;
 import com.pathplanner.lib.commands.PathPlannerAuto;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveModule.DriveRequestType;
+import com.fasterxml.jackson.core.sym.Name;
+import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.auto.NamedCommands;
+import com.pathplanner.lib.commands.PathPlannerAuto;
+import com.pathplanner.lib.path.PathPlannerPath;
 
+
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.wpilibj.Filesystem;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
@@ -21,6 +30,7 @@ import edu.wpi.first.wpilibj2.command.RunCommand;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import frc.robot.Constants.TunerConstants;
 import frc.robot.Constants.IOConstants;
+import frc.robot.subsystems.AutonIntakeCommand;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 // import frc.robot.subsystems.OrchestraSubsystem;
 import frc.robot.subsystems.ShooterSubsystem;
@@ -43,21 +53,30 @@ public class RobotContainer {
 
     private final Telemetry logger = new Telemetry(MaxSpeed);
 
-    private final ShooterSubsystem shooter = new ShooterSubsystem();
+    public static final ShooterSubsystem m_robotShooter = new ShooterSubsystem();
+
     //private final OrchestraSubsystem orchestra = new OrchestraSubsystem(drivetrain, Filesystem.getDeployDirectory() + "/test.chrp");
 
 
 
     private void configureBindings() {
+
+        // drivetrain.setDefaultCommand( // Drivetrain will execute this command periodically
+        //     new RunCommand(
+        //     () -> {
+        //       drivetrain.driveRobotRelative(new ChassisSpeeds(-driverController.getLeftY() * MaxSpeed, -driverController.getLeftX() * MaxSpeed, -driverController.getRightX() * MaxAngularRate));
+        //     },
+        //     drivetrain));
+
         drivetrain.setDefaultCommand( // Drivetrain will execute this command periodically
-            drivetrain.applyRequest(() -> drive.withVelocityX(driverController.getLeftY() * MaxSpeed) // Drive forward with negative Y (forward)
-                .withVelocityY(driverController.getLeftX() * MaxSpeed) // Drive left with negative X (left)
+            drivetrain.applyRequest(() -> drive.withVelocityX(-driverController.getLeftY() * MaxSpeed) // Drive forward with negative Y (forward)
+                .withVelocityY(-driverController.getLeftX() * MaxSpeed) // Drive left with negative X (left)
                 .withRotationalRate(-driverController.getRightX() * MaxAngularRate) // Drive counterclockwise with negative X (left)
             ));
 
         driverController.a().whileTrue(drivetrain.applyRequest(() -> brake));
         driverController.b().whileTrue(drivetrain
-            .applyRequest(() -> point.withModuleDirection(new Rotation2d(driverController.getLeftY(), driverController.getLeftX()))));
+            .applyRequest(() -> point.withModuleDirection(new Rotation2d(-driverController.getLeftY(), -driverController.getLeftX()))));
 
         // reset the field-centric heading on left bumper press
         driverController.leftBumper().onTrue(drivetrain.runOnce(() -> drivetrain.seedFieldRelative()));
@@ -68,29 +87,29 @@ public class RobotContainer {
         drivetrain.registerTelemetry(logger::telemeterize);
 
         // shooter and intake button bindings
-        shooter.setDefaultCommand(
+        m_robotShooter.setDefaultCommand(
             // The left stick controls translation of the robot.
             // Turning is controlled by the X axis of the right stick.
             new RunCommand(
                 () -> {
-                    shooter.defaultShooter();
+                    m_robotShooter.defaultShooter();
                 },
-                shooter));
+                m_robotShooter));
 
         operatorController.leftBumper()
             .whileTrue(new RunCommand(
-                () -> shooter.outake(),
-                shooter));
+                () -> m_robotShooter.outake(),
+                m_robotShooter));
         
         operatorController.leftTrigger(0.5)
             .whileTrue(new RunCommand(
-                () -> shooter.intake(),
-                shooter));
+                () -> m_robotShooter.intake1(),
+                m_robotShooter));
 
         operatorController.rightTrigger(0.2)
             .whileTrue(new RunCommand(
-                () -> shooter.shoot(),
-                shooter));
+                () -> m_robotShooter.shoot(),
+                m_robotShooter));
         // operatorController.a()
         //     .onTrue(new RunCommand(() -> {
         //         if (orchestra.isPlaying()) {
@@ -102,7 +121,10 @@ public class RobotContainer {
     }
 
     public RobotContainer() {
+        NamedCommands.registerCommand("Intake" ,new AutonIntakeCommand());
+
         configureBindings();
+        
     }
 
     public Command getAutonomousCommand() {
