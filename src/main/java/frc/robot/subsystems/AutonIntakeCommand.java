@@ -16,6 +16,7 @@ public class AutonIntakeCommand extends Command {
   Timer timer = new Timer();
   /** Creates a new IntakeCommand. */
   public AutonIntakeCommand() {
+    addRequirements(RobotContainer.m_robotShooter);
     // Use addRequirements() here to declare subsystem dependencies.
   }
 
@@ -53,7 +54,7 @@ public class AutonIntakeCommand extends Command {
     //   RobotContainer.m_robotShooter.intakeMotor.set(0);
     //   RobotContainer.m_robotShooter.conveyorMotor.set(0);
     // }
-    return timer.get() >= 2;
+    return timer.get() >= 1;
     //return Subsystems.m_intakeSubsystem.shouldIntakeStop();
   }
 }
