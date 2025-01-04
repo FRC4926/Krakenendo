@@ -6,18 +6,26 @@ package frc.robot;
 
 import org.photonvision.PhotonCamera;
 
+import com.ctre.phoenix6.mechanisms.swerve.SwerveModule.DriveRequestType;
+import com.ctre.phoenix6.mechanisms.swerve.SwerveRequest;
+
 import edu.wpi.first.cameraserver.CameraServer;
 import edu.wpi.first.cscore.CvSink;
 import edu.wpi.first.cscore.CvSource;
+import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
+import frc.robot.Constants.TunerConstants;
+import frc.robot.subsystems.CommandSwerveDrivetrain;
 
 public class Robot extends TimedRobot {
   private Command m_autonomousCommand;
 
   private RobotContainer m_robotContainer;
+  //PhotonCamera smallCamera = new PhotonCamera("smallcam");
+  // PIDController test = new PIDController(1, 0, 0);
 
 
   @Override
@@ -34,12 +42,13 @@ public class Robot extends TimedRobot {
   @Override
   public void robotPeriodic() {
     // var smallResult = smallCamera.getLatestResult();
-    // var bigResult = bigCamera.getLatestResult();
-    // //SmartDashboard.putBoolean("Camera is connected", smallCamera.isConnected());
-    // //SmartDashboard.putNumber("Camera pipeline index", smallCamera.getPipelineIndex());
-    // //SmartDashboard.putBoolean("Camera has targets", result.hasTargets());
+    // // var bigResult = bigCamera.getLatestResult();
+    // SmartDashboard.putBoolean("Camera is connected", smallCamera.isConnected());
+    // // //SmartDashboard.putNumber("Camera pipeline index", smallCamera.getPipelineIndex());
+    // // //SmartDashboard.putBoolean("Camera has targets", result.hasTargets());
     // SmartDashboard.putNumber("April tag Small Index",
     //   smallResult.hasTargets() ? smallResult.getBestTarget().getFiducialId() : -1);
+
 
     // SmartDashboard.putNumber("April tag Big Index",
     //   bigResult.hasTargets() ? bigResult.getBestTarget().getFiducialId() : -1);
@@ -92,7 +101,22 @@ public class Robot extends TimedRobot {
   }
 
   @Override
-  public void testPeriodic() {}
+  public void testPeriodic() {
+    // test.setSetpoint(0);
+    // test.setTolerance(0.3);
+        
+    //   var smallResult = smallCamera.getLatestResult();
+    //   if (smallResult.hasTargets())
+    //   {
+    //     double speed = test.calculate(smallResult.getBestTarget().getYaw());
+    //     SmartDashboard.putNumber("PIDSpeed", speed);
+    //     RobotContainer.drivetrain.applyRequest(() -> RobotContainer.drive.withVelocityX(0) // Drive forward with negative Y (forward)
+    //             .withVelocityY(speed) // Drive left with negative X (left)
+    //             .withRotationalRate(0) // Drive counterclockwise with negative X (left)
+    //         );
+        
+    //   }
+  }
 
   @Override
   public void testExit() {}
